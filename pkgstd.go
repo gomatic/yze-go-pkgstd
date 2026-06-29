@@ -1,8 +1,9 @@
 // Package pkgstd provides a go/analysis analyzer enforcing the gomatic three-tier
 // layout's per-package standards. For a command package
-// (internal/app/commands/<cmd>): the first declaration is the const block, a
-// Command() entry point exists, and the domain package is imported under the
-// "domain" alias. (Cross-package correspondence is the layout analyzer's job.)
+// (internal/app/commands/<cmd>): the command file (the one defining Command())
+// leads with a const block, a Command() entry point exists, and the domain
+// package is imported under the "domain" alias. (Cross-package correspondence is
+// the layout analyzer's job.)
 package pkgstd
 
 import (
@@ -25,7 +26,7 @@ var Analyzer = &analysis.Analyzer{
 var Registration = goyze.Registration{
 	Name:       "pkgstd",
 	Categories: []goyze.Category{"structure"},
-	URL:        "https://docs.gomatic.dev/yze/go/pkgstd",
+	URL:        "https://docs.gomatic.dev/yze/pkgstd",
 	Analyzer:   Analyzer,
 }
 
@@ -44,18 +45,44 @@ func isCommandPackage(pkgPath string) bool {
 	return strings.Contains(pkgPath, "/internal/app/commands/")
 }
 
-// checkConstFirst reports when the first non-import declaration is not a const
-// block.
+// checkConstFirst reports when the command file's first non-import declaration
+// is not a const block. The command file (the one defining Command()) is the
+// canonical metadata file, so the check targets it rather than an arbitrary
+// first file of a multi-file package. When no command file exists,
+// checkCommandFunc reports the missing entry point and this check is a no-op.
 func checkConstFirst(pass *analysis.Pass) {
-	for _, decl := range pass.Files[0].Decls {
+	file := commandFile(pass)
+	if file == nil {
+		return
+	}
+	reportNonConstFirst(pass, file)
+}
+
+// reportNonConstFirst reports when file's first non-import declaration is not a
+// const block.
+func reportNonConstFirst(pass *analysis.Pass, file *ast.File) {
+	for _, decl := range file.Decls {
 		if isImportDecl(decl) {
 			continue
 		}
 		if !isConstDecl(decl) {
-			pass.Reportf(decl.Pos(), "command package: the first declaration must be the const block (name, usage, ...)")
+			pass.Reportf(decl.Pos(), "command package: the first declaration must be the const block")
 		}
 		return
 	}
+}
+
+// commandFile returns the file defining the Command() entry point, or nil when
+// the package has none.
+func commandFile(pass *analysis.Pass) *ast.File {
+	for _, file := range pass.Files {
+		for _, decl := range file.Decls {
+			if isCommandFunc(decl) {
+				return file
+			}
+		}
+	}
+	return nil
 }
 
 func isImportDecl(decl ast.Decl) bool {
@@ -70,14 +97,9 @@ func isConstDecl(decl ast.Decl) bool {
 
 // checkCommandFunc reports when the package has no Command() entry point.
 func checkCommandFunc(pass *analysis.Pass) {
-	for _, file := range pass.Files {
-		for _, decl := range file.Decls {
-			if isCommandFunc(decl) {
-				return
-			}
-		}
+	if commandFile(pass) == nil {
+		pass.Reportf(pass.Files[0].Name.Pos(), "command package: missing the Command() entry point")
 	}
-	pass.Reportf(pass.Files[0].Name.Pos(), "command package: missing the Command() entry point")
 }
 
 func isCommandFunc(decl ast.Decl) bool {

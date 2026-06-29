@@ -14,6 +14,7 @@ func TestCommandPackageStandards(t *testing.T) {
 		t, analysistest.TestData(), pkgstd.Analyzer,
 		"m/internal/domain/greet",
 		"m/internal/app/commands/greet",
+		"m/internal/app/commands/multifile",
 		"m/internal/app/commands/badalias",
 		"m/internal/app/commands/noconst",
 		"m/internal/app/commands/nocmd",
