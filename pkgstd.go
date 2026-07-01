@@ -1,9 +1,11 @@
 // Package pkgstd provides a go/analysis analyzer enforcing the gomatic three-tier
 // layout's per-package standards. For a command package
-// (internal/app/commands/<cmd>): the command file (the one defining Command())
-// leads with a const block, a Command() entry point exists, and the domain
-// package is imported under the "domain" alias. (Cross-package correspondence is
-// the layout analyzer's job.)
+// (internal/app/commands/<cmd>): the command file (the first one defining a
+// command entry point) leads with a const block, at least one entry point —
+// Command() or an exported <Verb>Command() constructor for a package exposing
+// several verbs (e.g. PlanCommand/ApplyCommand) — exists, and the domain package
+// is imported under the "domain" alias. (Cross-package correspondence is the
+// layout analyzer's job.)
 package pkgstd
 
 import (
@@ -64,10 +66,11 @@ func isCommandPackage(pkgPath string) bool {
 }
 
 // checkConstFirst reports when the command file's first non-import declaration
-// is not a const block. The command file (the one defining Command()) is the
-// canonical metadata file, so the check targets it rather than an arbitrary
-// first file of a multi-file package. When no command file exists,
-// checkCommandFunc reports the missing entry point and this check is a no-op.
+// is not a const block. The command file (the first one defining a command
+// entry point) is the canonical metadata file, so the check targets it rather
+// than an arbitrary first file of a multi-file package. When no command file
+// exists, checkCommandFunc reports the missing entry point and this check is a
+// no-op.
 func checkConstFirst(pass *analysis.Pass) {
 	file := commandFile(pass)
 	if file == nil {
@@ -90,8 +93,8 @@ func reportNonConstFirst(pass *analysis.Pass, file *ast.File) {
 	}
 }
 
-// commandFile returns the file defining the Command() entry point, or nil when
-// the package has none.
+// commandFile returns the first file defining a command entry point, or nil
+// when the package has none.
 func commandFile(pass *analysis.Pass) *ast.File {
 	for _, file := range pass.Files {
 		for _, decl := range file.Decls {
@@ -113,16 +116,20 @@ func isConstDecl(decl ast.Decl) bool {
 	return ok && gen.Tok == token.CONST
 }
 
-// checkCommandFunc reports when the package has no Command() entry point.
+// checkCommandFunc reports when the package has no command entry point.
 func checkCommandFunc(pass *analysis.Pass) {
 	if commandFile(pass) == nil {
-		pass.Reportf(pass.Files[0].Name.Pos(), "command package: missing the Command() entry point")
+		pass.Reportf(pass.Files[0].Name.Pos(), "command package: missing a Command() (or <Verb>Command()) entry point")
 	}
 }
 
+// isCommandFunc reports whether decl is a command entry point: an exported
+// top-level function named Command, or a <Verb>Command constructor — a package
+// exposing several verbs from one domain (e.g. PlanCommand/ApplyCommand)
+// satisfies the standard without a bare Command().
 func isCommandFunc(decl ast.Decl) bool {
 	fn, ok := decl.(*ast.FuncDecl)
-	return ok && fn.Recv == nil && fn.Name.Name == "Command"
+	return ok && fn.Recv == nil && ast.IsExported(fn.Name.Name) && strings.HasSuffix(fn.Name.Name, "Command")
 }
 
 // checkDomainAlias reports domain imports not aliased as "domain".

@@ -15,6 +15,7 @@ func TestCommandPackageStandards(t *testing.T) {
 		"m/internal/domain/greet",
 		"m/internal/app/commands/greet",
 		"m/internal/app/commands/multifile",
+		"m/internal/app/commands/multiverb",
 		"m/internal/app/commands/badalias",
 		"m/internal/app/commands/noconst",
 		"m/internal/app/commands/nocmd",

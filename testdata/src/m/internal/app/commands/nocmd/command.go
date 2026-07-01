@@ -1,4 +1,4 @@
-package nocmd // want `Command\(\) entry`
+package nocmd // want `missing a Command`
 
 import domain "m/internal/domain/greet"
 
