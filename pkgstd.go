@@ -44,7 +44,7 @@ var Registration = goyze.Registration{
 // pass.Files (the test-only directory whose sole files are external tests yields
 // an empty "<pkg>_test" pass), so checkCommandFunc never indexes an empty slice.
 func run(pass *analysis.Pass) (any, error) {
-	if isScaffoldingPackage(pass) || !isCommandPackage(pass.Pkg.Path()) || len(pass.Files) == 0 {
+	if isScaffoldingPackage(pass) || !isCommandPackage(pkgPathParam(pass.Pkg.Path())) || len(pass.Files) == 0 {
 		return nil, nil
 	}
 	checkConstFirst(pass)
@@ -60,9 +60,12 @@ func isScaffoldingPackage(pass *analysis.Pass) bool {
 	return strings.HasSuffix(pass.Pkg.Name(), "_test") || strings.HasSuffix(pass.Pkg.Path(), ".test")
 }
 
+// pkgPathParam names the pkgPath parameter of isCommandPackage; rename it to the real domain concept.
+type pkgPathParam string
+
 // isCommandPackage reports whether a package path is a command package.
-func isCommandPackage(pkgPath string) bool {
-	return strings.Contains(pkgPath, "/internal/app/commands/")
+func isCommandPackage(pkgPath pkgPathParam) bool {
+	return strings.Contains(string(pkgPath), "/internal/app/commands/")
 }
 
 // checkConstFirst reports when the command file's first non-import declaration
