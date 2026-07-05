@@ -63,9 +63,14 @@ func isScaffoldingPackage(pass *analysis.Pass) bool {
 // importPath is the import path of an analyzed package.
 type importPath string
 
-// isCommandPackage reports whether a package path is a command package.
+// isCommandPackage reports whether a package path is a command package: the
+// direct child of internal/app/commands, i.e. exactly one path segment follows
+// the marker. Deeper descendants (e.g. a helper nested beneath a command, such
+// as .../commands/greet/internal/render) are not command packages and carry
+// none of the per-package obligations.
 func isCommandPackage(pkgPath importPath) bool {
-	return strings.Contains(string(pkgPath), "/internal/app/commands/")
+	_, cmd, found := strings.Cut(string(pkgPath), "/internal/app/commands/")
+	return found && cmd != "" && !strings.Contains(cmd, "/")
 }
 
 // checkConstFirst reports when the command file's first non-import declaration
@@ -96,17 +101,34 @@ func reportNonConstFirst(pass *analysis.Pass, file *ast.File) {
 	}
 }
 
-// commandFile returns the first file defining a command entry point, or nil
-// when the package has none.
+// commandFile returns the first non-test file defining a command entry point,
+// or nil when the package has none. Test files never carry the command source
+// and are skipped: the in-package test-variant pass appends _test.go files to
+// pass.Files, where an exported Test*Command test function (e.g. TestCommand)
+// would otherwise be mistaken for the entry point — anchoring a spurious
+// const-first diagnostic in the test file and masking a missing entry point.
 func commandFile(pass *analysis.Pass) *ast.File {
 	for _, file := range pass.Files {
-		for _, decl := range file.Decls {
-			if isCommandFunc(decl) {
-				return file
-			}
+		if !isTestFile(pass, file) && declaresCommandFunc(file) {
+			return file
 		}
 	}
 	return nil
+}
+
+// isTestFile reports whether file is a test file (_test.go).
+func isTestFile(pass *analysis.Pass, file *ast.File) bool {
+	return strings.HasSuffix(pass.Fset.File(file.Pos()).Name(), "_test.go")
+}
+
+// declaresCommandFunc reports whether file declares a command entry point.
+func declaresCommandFunc(file *ast.File) bool {
+	for _, decl := range file.Decls {
+		if isCommandFunc(decl) {
+			return true
+		}
+	}
+	return false
 }
 
 func isImportDecl(decl ast.Decl) bool {
